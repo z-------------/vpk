@@ -25,6 +25,7 @@ type
   Vpk* = object
     header*: VpkHeader
     entries*: Table[string, VpkDirectoryEntry]
+    f: File
   VpkHeader* = object
     # common
     signature*: uint32
@@ -103,21 +104,22 @@ proc readDirectory*(f: File): Table[string, VpkDirectoryEntry] =
         let fullPath = buildFullPath(extension, path, filename)
         result[fullpath] = readDirectoryEntry(f)
 
-proc readFile*(f: File; header: VpkHeader; dirEntry: VpkDirectoryEntry; outBuf: pointer; outBufLen: uint32) =
+proc readFile*(v: Vpk; dirEntry: VpkDirectoryEntry; outBuf: pointer; outBufLen: uint32) =
   var p = 0'u32
 
   if dirEntry.preloadBytes != 0:
-    f.setFilePos(dirEntry.endOffset)
-    f.readBufferStrict(outBuf, min(dirEntry.preloadBytes.uint32, outBufLen))
+    v.f.setFilePos(dirEntry.endOffset)
+    v.f.readBufferStrict(outBuf, min(dirEntry.preloadBytes.uint32, outBufLen))
     p += dirEntry.preloadBytes
 
   if dirEntry.archiveIndex == 0x7fff:
-    f.setFilePos((header.fileDataOffset + dirEntry.entryOffset).int64)
-    f.readBufferStrict(outBuf +@ p, min(dirEntry.entryLength, outBufLen - p))
+    v.f.setFilePos((v.header.fileDataOffset + dirEntry.entryOffset).int64)
+    v.f.readBufferStrict(outBuf +@ p, min(dirEntry.entryLength, outBufLen - p))
   else:
     raise newException(CatchableError, "file data in separate files is not supported")
 
 proc readVpk*(f: File): Vpk =
+  result.f = f
   result.header = readHeader(f)
   if result.header.version == 2:
     raise newException(CatchableError, "VPK 2 is not supported")

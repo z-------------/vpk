@@ -19,22 +19,20 @@ import std/os
 export parse
 
 when isMainModule:
-  import std/strutils
-  import std/strformat
-  import std/sugar
-
   doAssert paramCount() >= 1
   let
     filename = paramStr(1)
     f = open(filename, fmRead)
-  let data = readVpk(f)
+  let v = readVpk(f)
 
-  # echo data.header
-  # for fullpath, entry in data.entries.pairs:
-  #   echo fullpath, ": ", entry
-
-  let entry = data.entries[paramStr(2)]
-  var fileBuf = newSeq[byte](entry.totalLength)
-  f.readFile(data.header, entry, addr fileBuf[0], entry.totalLength)
-  for c in fileBuf:
-    echo c.char
+  if paramCount() >= 2:
+    let
+      entryName = paramStr(2)
+      entry = v.entries[entryName]
+    var fileBuf = newString(entry.totalLength)
+    v.readFile(entry, addr fileBuf[0], entry.totalLength)
+    echo fileBuf
+  else:
+    echo v.header
+    for fullpath, entry in v.entries.pairs:
+      echo fullpath, ": ", entry
