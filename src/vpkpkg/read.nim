@@ -105,6 +105,7 @@ func buildFullPath(extension, path, filename: string): string =
     result.add('.')
     result.add(extension)
 
+# TODO support "skipping"?
 proc readDirectory*(f: File): Table[string, VpkDirectoryEntry] =
   while true:
     let extension = f.readString()
