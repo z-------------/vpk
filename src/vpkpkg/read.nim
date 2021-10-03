@@ -16,6 +16,7 @@
 import std/tables
 import std/os
 import std/strutils
+import std/md5
 import ./streamutils
 
 export tables
@@ -48,12 +49,23 @@ type
     entryOffset*: uint32
     entryLength*: uint32
     endOffset*: int64 # offset of the end of this entry
+  VpkArchiveMd5Entry = object
+    archiveIndex: uint32
+    startingOffset: uint32
+    count: uint32
+    md5Checksum: array[16, byte]
+  VpkOtherMd5Entry = object
+    treeChecksum: array[16, byte]
+    archiveMd5SectionChecksum: array[16, byte]
+  VpkCheckHashResult* = tuple[result: bool; message: string]
 
 func fileDataOffset*(header: VpkHeader): uint32 =
   header.endOffset.uint32 + header.treeSize
 
 func totalLength*(dirEntry: VpkDirectoryEntry): uint32 =
   dirEntry.preloadBytes + dirEntry.entryLength
+
+# read directory #
 
 func getArchiveFilename*(v: Vpk; archiveIndex: uint32): string =
   const Suffix = "_dir"
@@ -125,6 +137,18 @@ proc readDirectory*(f: File): Table[string, VpkDirectoryEntry] =
         result[fullpath] = entry
         f.setFilePos(entry.preloadBytes.int64, fspCur)
 
+proc readVpk*(f: File; filename: string): Vpk =
+  result.f = f
+  result.filename = filename
+  result.header = readHeader(f)
+  result.entries = readDirectory(f)
+
+proc readVpk*(filename: string): Vpk =
+  let f = open(filename, fmRead)
+  readVpk(f, filename)
+
+# read files #
+
 proc readFile*(v: Vpk; dirEntry: VpkDirectoryEntry; outBuf: pointer; outBufLen: uint32) =
   var p = 0'u32
 
@@ -141,14 +165,78 @@ proc readFile*(v: Vpk; dirEntry: VpkDirectoryEntry; outBuf: pointer; outBufLen: 
   archiveFile.setFilePos(offset.int64)
   archiveFile.readBufferStrict(outBuf +@ p, min(dirEntry.entryLength, outBufLen - p))
 
-proc readVpk*(f: File; filename: string): Vpk =
-  result.f = f
-  result.filename = filename
-  result.header = readHeader(f)
-  if result.header.version == 2:
-    raise newException(CatchableError, "VPK 2 is not supported")
-  result.entries = readDirectory(f)
+# check hashes #
 
-proc readVpk*(filename: string): Vpk =
-  let f = open(filename, fmRead)
-  readVpk(f, filename)
+proc readArchiveMd5Entry(f: File): VpkArchiveMd5Entry =
+  result.archiveIndex = f.read(uint32)
+  result.startingOffset = f.read(uint32)
+  result.count = f.read(uint32)
+  result.md5Checksum = f.read(type(result.md5Checksum))
+
+template hashCheckHeaderVersion(header: VpkHeader): untyped =
+  if header.version != 2:
+    raise newException(CatchableError, "only VPK 2 supports hash checking")
+
+proc checkArchiveHashes*(v: Vpk): VpkCheckHashResult =
+  hashCheckHeaderVersion(v.header)
+  let
+    sectionOffset = v.header.fileDataOffset + v.header.fileDataSectionSize
+    count = v.header.archiveMd5SectionSize div 28 # each entry is 28 bytes long
+  if count == 0:
+    return (true, "no archive hashes to check")
+  var archiveEntries: Table[uint32, seq[VpkArchiveMd5Entry]]
+  v.f.setFilePos(sectionOffset.int64)
+  for i in 0..<count:
+    let entry = readArchiveMd5Entry(v.f)
+    if not archiveEntries.hasKey(entry.archiveIndex):
+      archiveEntries[entry.archiveIndex] = newSeq[VpkArchiveMd5Entry]()
+    archiveEntries[entry.archiveIndex].add(entry)
+  for archiveIndex in archiveEntries.keys:
+    let archiveFile = open(v.getArchiveFilename(archiveIndex), fmRead)
+    for entry in archiveEntries[archiveIndex]:
+      archiveFile.setFilePos(entry.startingOffset.int64)
+      var dataChunk = newString(entry.count)
+      archiveFile.readBufferStrict(addr dataChunk[0], entry.count)
+      if toMd5(dataChunk) != entry.md5Checksum:
+        return (false, "hash validation failed for archive " & $archiveIndex & " at offset " & $entry.startingOffset & ", length " & $entry.count)
+  (true, "")
+
+proc readOtherMd5Entry*(f: File): VpkOtherMd5Entry =
+  result.treeChecksum = f.read(type(result.treeChecksum))
+  result.archiveMd5SectionChecksum = f.read(type(result.archiveMd5SectionChecksum))
+
+proc checkOtherHashes(v: Vpk): VpkCheckHashResult =
+  hashCheckHeaderVersion(v.header)
+
+  let
+    archiveMd5SectionOffset = v.header.fileDataOffset + v.header.fileDataSectionSize
+    sectionOffset = archiveMd5SectionOffset + v.header.archiveMd5SectionSize
+  v.f.setFilePos(sectionOffset.int64)
+  let entry = readOtherMd5Entry(v.f)
+
+  # tree
+  v.f.setFilePos(v.header.endOffset)
+  var treeData = newString(v.header.treeSize)
+  v.f.readBufferStrict(addr treeData[0], v.header.treeSize)
+  if toMd5(treeData) != entry.treeChecksum:
+    return (false, "hash validation failed for tree")
+
+  # archive md5 section
+  v.f.setFilePos(archiveMd5SectionOffset.int64)
+  var archiveMd5SectionData = newString(v.header.archiveMd5SectionSize)
+  v.f.readBufferStrict(addr archiveMd5SectionData[0], v.header.archiveMd5SectionSize)
+  if toMd5(archiveMd5SectionData) != entry.archiveMd5SectionChecksum:
+    return (false, "hash validation failed for archive MD5 section")
+
+  (true, "")
+
+proc checkHashes*(v: Vpk): VpkCheckHashResult =
+  let archiveResult = v.checkArchiveHashes()
+  if not archiveResult.result:
+    return archiveResult
+
+  let otherResult = v.checkOtherHashes()
+  if not otherResult.result:
+    return otherResult
+
+  (true, "")
