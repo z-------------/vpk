@@ -69,6 +69,8 @@ func getArchiveFilename*(v: Vpk; archiveIndex: uint32): string =
 
 proc readHeader*(f: File): VpkHeader =
   result.signature = f.read(uint32)
+  if result.signature != 0x55aa1234:
+    raise newException(CatchableError, "invalid VPK file: wrong file signature: 0x" & $result.signature.toHex())
   result.version = f.read(uint32)
   if result.version notin {1, 2}:
     raise newException(CatchableError, "invalid version: " & $result.version)
