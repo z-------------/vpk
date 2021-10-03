@@ -102,8 +102,11 @@ proc readDirectory*(f: File): Table[string, VpkDirectoryEntry] =
         let filename = f.readString()
         if filename.empty:
           break
-        let fullPath = buildFullPath(extension, path, filename)
-        result[fullpath] = readDirectoryEntry(f)
+        let
+          fullPath = buildFullPath(extension, path, filename)
+          entry = readDirectoryEntry(f)
+        result[fullpath] = entry
+        f.setFilePos(entry.preloadBytes.int64, fspCur)
 
 proc readFile*(v: Vpk; dirEntry: VpkDirectoryEntry; outBuf: pointer; outBufLen: uint32) =
   var p = 0'u32
