@@ -14,11 +14,12 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import vpkpkg/read
-import std/os
 
 export read
 
 when isMainModule:
+  import std/os
+
   doAssert paramCount() >= 1
   let
     filename = paramStr(1)
