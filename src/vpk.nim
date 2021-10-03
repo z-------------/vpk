@@ -28,10 +28,11 @@ when isMainModule:
     let
       entryName = paramStr(2)
       entry = v.entries[entryName]
-    var fileBuf = newString(entry.totalLength)
-    v.readFile(entry, addr fileBuf[0], entry.totalLength)
-    echo fileBuf
+    if entry.totalLength > 0:
+      var fileBuf = newString(entry.totalLength)
+      v.readFile(entry, addr fileBuf[0], entry.totalLength)
+      echo fileBuf
   else:
     echo v.header
-    for fullpath, entry in v.entries.pairs:
-      echo fullpath, ": ", entry
+    for fullpath in v.entries.keys:
+      echo fullpath
