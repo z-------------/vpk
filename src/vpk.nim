@@ -13,10 +13,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import vpkpkg/parse
+import vpkpkg/read
 import std/os
 
-export parse
+export read
 
 when isMainModule:
   doAssert paramCount() >= 1
