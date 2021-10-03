@@ -25,6 +25,7 @@ type
   Vpk* = object
     header*: VpkHeader
     entries*: Table[string, VpkDirectoryEntry]
+    filename*: string
     f: File
   VpkHeader* = object
     # common
@@ -118,9 +119,14 @@ proc readFile*(v: Vpk; dirEntry: VpkDirectoryEntry; outBuf: pointer; outBufLen: 
   else:
     raise newException(CatchableError, "file data in separate files is not supported")
 
-proc readVpk*(f: File): Vpk =
+proc readVpk*(f: File; filename: string): Vpk =
   result.f = f
+  result.filename = filename
   result.header = readHeader(f)
   if result.header.version == 2:
     raise newException(CatchableError, "VPK 2 is not supported")
   result.entries = readDirectory(f)
+
+proc readVpk*(filename: string): Vpk =
+  let f = open(filename, fmRead)
+  readVpk(f, filename)

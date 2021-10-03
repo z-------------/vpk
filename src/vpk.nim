@@ -22,8 +22,7 @@ when isMainModule:
   doAssert paramCount() >= 1
   let
     filename = paramStr(1)
-    f = open(filename, fmRead)
-  let v = readVpk(f)
+    v = readVpk(filename)
 
   if paramCount() >= 2:
     let
