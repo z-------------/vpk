@@ -133,12 +133,11 @@ proc readFile*(v: Vpk; dirEntry: VpkDirectoryEntry; outBuf: pointer; outBufLen: 
     v.f.readBufferStrict(outBuf, min(dirEntry.preloadBytes.uint32, outBufLen))
     p += dirEntry.preloadBytes
 
-  let
-    (archiveFile, offset) =
-      if dirEntry.archiveIndex == 0x7fff:
-        (v.f, v.header.fileDataOffset + dirEntry.entryOffset)
-      else:
-        (open(v.getArchiveFilename(dirEntry.archiveIndex), fmRead), dirEntry.entryOffset)
+  let (archiveFile, offset) =
+    if dirEntry.archiveIndex == 0x7fff:
+      (v.f, v.header.fileDataOffset + dirEntry.entryOffset)
+    else:
+      (open(v.getArchiveFilename(dirEntry.archiveIndex), fmRead), dirEntry.entryOffset)
   archiveFile.setFilePos(offset.int64)
   archiveFile.readBufferStrict(outBuf +@ p, min(dirEntry.entryLength, outBufLen - p))
 
