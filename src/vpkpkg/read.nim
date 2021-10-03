@@ -14,6 +14,8 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import std/tables
+import std/os
+import std/strutils
 import ./streamutils
 
 export tables
@@ -52,6 +54,18 @@ func fileDataOffset*(header: VpkHeader): uint32 =
 
 func totalLength*(dirEntry: VpkDirectoryEntry): uint32 =
   dirEntry.preloadBytes + dirEntry.entryLength
+
+func getArchiveFilename*(v: Vpk; archiveIndex: uint32): string =
+  const Suffix = "_dir"
+  let
+    (dir, name, extension) = splitFile(v.filename)
+    suffixIdx = name.find(Suffix)
+  if suffixIdx == -1 or suffixIdx + Suffix.len != name.len:
+    raise newException(CatchableError, "filename of current VPK does not end with \"_dir\"")
+  let
+    nameBase = name[0..suffixIdx] # incl. '_'
+    indexStr = ($archiveIndex).align(3, '0') # TODO is it always 3?
+  dir / nameBase & indexStr & extension
 
 proc readHeader*(f: File): VpkHeader =
   result.signature = f.read(uint32)
@@ -116,11 +130,14 @@ proc readFile*(v: Vpk; dirEntry: VpkDirectoryEntry; outBuf: pointer; outBufLen: 
     v.f.readBufferStrict(outBuf, min(dirEntry.preloadBytes.uint32, outBufLen))
     p += dirEntry.preloadBytes
 
-  if dirEntry.archiveIndex == 0x7fff:
-    v.f.setFilePos((v.header.fileDataOffset + dirEntry.entryOffset).int64)
-    v.f.readBufferStrict(outBuf +@ p, min(dirEntry.entryLength, outBufLen - p))
-  else:
-    raise newException(CatchableError, "file data in separate files is not supported")
+  let
+    (archiveFile, offset) =
+      if dirEntry.archiveIndex == 0x7fff:
+        (v.f, v.header.fileDataOffset + dirEntry.entryOffset)
+      else:
+        (open(v.getArchiveFilename(dirEntry.archiveIndex), fmRead), dirEntry.entryOffset)
+  archiveFile.setFilePos(offset.int64)
+  archiveFile.readBufferStrict(outBuf +@ p, min(dirEntry.entryLength, outBufLen - p))
 
 proc readVpk*(f: File; filename: string): Vpk =
   result.f = f
