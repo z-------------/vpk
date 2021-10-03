@@ -177,7 +177,19 @@ template hashCheckHeaderVersion(header: VpkHeader): untyped =
   if header.version != 2:
     raise newException(CatchableError, "only VPK 2 supports hash checking")
 
-proc checkArchiveHashes*(v: Vpk): VpkCheckHashResult =
+proc checkArchiveHashesForIndex(v: Vpk; archiveIndex: uint32; entries: seq[VpkArchiveMd5Entry]): VpkCheckHashResult =
+  result = (true, "")
+  let archiveFile = open(v.getArchiveFilename(archiveIndex), fmRead)
+  for entry in entries:
+    archiveFile.setFilePos(entry.startingOffset.int64)
+    var dataChunk = newString(entry.count)
+    archiveFile.readBufferStrict(addr dataChunk[0], entry.count)
+    if toMd5(dataChunk) != entry.md5Checksum:
+      result = (false, "hash validation failed for archive " & $archiveIndex & " at offset " & $entry.startingOffset & ", length " & $entry.count)
+      break
+  archiveFile.close()
+
+proc checkArchiveHashes(v: Vpk): VpkCheckHashResult =
   hashCheckHeaderVersion(v.header)
   let
     sectionOffset = v.header.fileDataOffset + v.header.fileDataSectionSize
@@ -192,13 +204,9 @@ proc checkArchiveHashes*(v: Vpk): VpkCheckHashResult =
       archiveEntries[entry.archiveIndex] = newSeq[VpkArchiveMd5Entry]()
     archiveEntries[entry.archiveIndex].add(entry)
   for archiveIndex in archiveEntries.keys:
-    let archiveFile = open(v.getArchiveFilename(archiveIndex), fmRead)
-    for entry in archiveEntries[archiveIndex]:
-      archiveFile.setFilePos(entry.startingOffset.int64)
-      var dataChunk = newString(entry.count)
-      archiveFile.readBufferStrict(addr dataChunk[0], entry.count)
-      if toMd5(dataChunk) != entry.md5Checksum:
-        return (false, "hash validation failed for archive " & $archiveIndex & " at offset " & $entry.startingOffset & ", length " & $entry.count)
+    let archiveIndexResult = checkArchiveHashesForIndex(v, archiveIndex, archiveEntries[archiveIndex])
+    if not archiveIndexResult.result:
+      return archiveIndexResult
   (true, "")
 
 proc readOtherMd5Entry*(f: File): VpkOtherMd5Entry =
