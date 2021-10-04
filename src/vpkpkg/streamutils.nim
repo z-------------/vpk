@@ -13,6 +13,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import std/macros
+
 template `+@`*[T: SomeInteger](p: pointer; offset: T): pointer =
   ## Pointer offset
   cast[pointer](cast[ByteAddress](p) + offset.int64)
@@ -30,3 +32,39 @@ proc readString*(f: File): string =
     if c == '\0':
       break
     result.add(c)
+
+iterator fields(t: NimNode): NimNode =
+  for fieldNode in t.getType[1].getType[2]:
+    yield fieldNode
+
+macro readStruct*(f: untyped; T: typedesc): untyped =
+  var stmtList = newStmtList()
+  stmtList.add(nnkVarSection.newTree(
+    nnkIdentDefs.newTree(
+      newIdentNode("obj"),
+      T,
+      newEmptyNode()
+    )
+  ))
+  for fieldNode in T.fields:
+    stmtList.add(nnkAsgn.newTree(
+      nnkDotExpr.newTree(
+        newIdentNode("obj"),
+        fieldNode
+      ),
+      nnkCall.newTree(
+        nnkDotExpr.newTree(
+          f,
+          newIdentNode("read")
+        ),
+        nnkCall.newTree(
+          newIdentNode("type"),
+          nnkDotExpr.newTree(
+            newIdentNode("obj"),
+            fieldNode
+          )
+        )
+      )
+    ))
+  stmtList.add(newIdentNode("obj"))
+  result = newBlockStmt(stmtList)

@@ -167,12 +167,6 @@ proc readFile*(v: Vpk; dirEntry: VpkDirectoryEntry; outBuf: pointer; outBufLen: 
 
 # check hashes #
 
-proc readArchiveMd5Entry(f: File): VpkArchiveMd5Entry =
-  result.archiveIndex = f.read(uint32)
-  result.startingOffset = f.read(uint32)
-  result.count = f.read(uint32)
-  result.md5Checksum = f.read(type(result.md5Checksum))
-
 template hashCheckHeaderVersion(header: VpkHeader): untyped =
   if header.version != 2:
     raise newException(CatchableError, "only VPK 2 supports hash checking")
@@ -199,7 +193,7 @@ proc checkArchiveHashes(v: Vpk): VpkCheckHashResult =
   var archiveEntries: Table[uint32, seq[VpkArchiveMd5Entry]]
   v.f.setFilePos(sectionOffset.int64)
   for i in 0..<count:
-    let entry = readArchiveMd5Entry(v.f)
+    let entry = v.f.readStruct(VpkArchiveMd5Entry)
     if not archiveEntries.hasKey(entry.archiveIndex):
       archiveEntries[entry.archiveIndex] = newSeq[VpkArchiveMd5Entry]()
     archiveEntries[entry.archiveIndex].add(entry)
@@ -209,10 +203,6 @@ proc checkArchiveHashes(v: Vpk): VpkCheckHashResult =
       return archiveIndexResult
   (true, "")
 
-proc readOtherMd5Entry*(f: File): VpkOtherMd5Entry =
-  result.treeChecksum = f.read(type(result.treeChecksum))
-  result.archiveMd5SectionChecksum = f.read(type(result.archiveMd5SectionChecksum))
-
 proc checkOtherHashes(v: Vpk): VpkCheckHashResult =
   hashCheckHeaderVersion(v.header)
 
@@ -220,7 +210,7 @@ proc checkOtherHashes(v: Vpk): VpkCheckHashResult =
     archiveMd5SectionOffset = v.header.fileDataOffset + v.header.fileDataSectionSize
     sectionOffset = archiveMd5SectionOffset + v.header.archiveMd5SectionSize
   v.f.setFilePos(sectionOffset.int64)
-  let entry = readOtherMd5Entry(v.f)
+  let entry = v.f.readStruct(VpkOtherMd5Entry)
 
   # tree
   v.f.setFilePos(v.header.endOffset)
