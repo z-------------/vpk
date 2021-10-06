@@ -37,7 +37,7 @@ iterator fields(t: NimNode): NimNode =
   for fieldNode in t.getType[1].getType[2]:
     yield fieldNode
 
-macro readStruct*(f: untyped; T: typedesc): untyped =
+macro readStruct*(f: File; T: typedesc): untyped =
   var stmtList = newStmtList()
   stmtList.add(nnkVarSection.newTree(
     nnkIdentDefs.newTree(
