@@ -35,7 +35,7 @@ type
     archiveFiles: Table[uint32, File]
   VpkHeader* = object
     # common
-    signature*: uint32
+    magicNumber*: uint32
     version*: uint32
     treeSize*: uint32
     # v2 only
@@ -102,9 +102,9 @@ func getArchiveFilename*(v: Vpk; archiveIndex: uint32): string =
   dir / nameBase & indexStr & extension
 
 proc readHeader*(f: File): VpkHeader =
-  result.signature = f.read(uint32)
-  if result.signature != 0x55aa1234:
-    raise newException(CatchableError, "invalid VPK file: wrong file signature: 0x" & $result.signature.toHex())
+  result.magicNumber = f.read(uint32)
+  if result.magicNumber != 0x55aa1234:
+    raise newException(CatchableError, "invalid VPK file: wrong file signature: 0x" & $result.magicNumber.toHex())
   result.version = f.read(uint32)
   if result.version notin {1, 2}:
     raise newException(CatchableError, "invalid version: " & $result.version)
