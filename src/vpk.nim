@@ -21,9 +21,8 @@ when isMainModule:
   import std/os
 
   doAssert paramCount() >= 1
-  let
-    filename = paramStr(1)
-    v = readVpk(filename)
+  let filename = paramStr(1)
+  var v = readVpk(filename)
 
   if paramCount() >= 2:
     let

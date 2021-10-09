@@ -29,7 +29,8 @@ type
     header*: VpkHeader
     entries*: Table[string, VpkDirectoryEntry]
     filename*: string
-    f: File
+    f: File # dir file
+    archiveFiles: Table[uint32, File]
   VpkHeader* = object
     # common
     signature*: uint32
@@ -64,6 +65,13 @@ func fileDataOffset*(header: VpkHeader): uint32 =
 
 func totalLength*(dirEntry: VpkDirectoryEntry): uint32 =
   dirEntry.preloadBytes + dirEntry.entryLength
+
+proc close*(v: var Vpk) =
+  ## close dir file and any archive files
+  v.f.close()
+  for archiveFile in v.archiveFiles.values:
+    archiveFile.close()
+  v.archiveFiles.clear()
 
 # read directory #
 
@@ -149,7 +157,15 @@ proc readVpk*(filename: string): Vpk =
 
 # read files #
 
-proc readFile*(v: Vpk; dirEntry: VpkDirectoryEntry; outBuf: pointer; outBufLen: uint32) =
+proc getArchiveFile(v: var Vpk; archiveIndex: uint32): File =
+  try:
+    v.archiveFiles[archiveIndex]
+  except KeyError:
+    let archiveFile = open(v.getArchiveFilename(archiveIndex), fmRead)
+    v.archiveFiles[archiveIndex] = archiveFile
+    archiveFile
+
+proc readFile*(v: var Vpk; dirEntry: VpkDirectoryEntry; outBuf: pointer; outBufLen: uint32) =
   var p = 0'u32
 
   if dirEntry.preloadBytes != 0:
@@ -161,7 +177,7 @@ proc readFile*(v: Vpk; dirEntry: VpkDirectoryEntry; outBuf: pointer; outBufLen: 
     if dirEntry.archiveIndex == 0x7fff:
       (v.f, v.header.fileDataOffset + dirEntry.entryOffset)
     else:
-      (open(v.getArchiveFilename(dirEntry.archiveIndex), fmRead), dirEntry.entryOffset)
+      (v.getArchiveFile(dirEntry.archiveIndex), dirEntry.entryOffset)
   archiveFile.setFilePos(offset.int64)
   archiveFile.readBufferStrict(outBuf +@ p, min(dirEntry.entryLength, outBufLen - p))
 
@@ -171,19 +187,17 @@ template hashCheckHeaderVersion(header: VpkHeader): untyped =
   if header.version != 2:
     raise newException(CatchableError, "only VPK 2 supports hash checking")
 
-proc checkArchiveHashesForIndex(v: Vpk; archiveIndex: uint32; entries: seq[VpkArchiveMd5Entry]): VpkCheckHashResult =
+proc checkArchiveHashesForIndex(v: var Vpk; archiveIndex: uint32; entries: seq[VpkArchiveMd5Entry]): VpkCheckHashResult =
   result = (true, "")
-  let archiveFile = open(v.getArchiveFilename(archiveIndex), fmRead)
+  let archiveFile = v.getArchiveFile(archiveIndex)
   for entry in entries:
     archiveFile.setFilePos(entry.startingOffset.int64)
     var dataChunk = newString(entry.count)
     archiveFile.readBufferStrict(addr dataChunk[0], entry.count)
     if toMd5(dataChunk) != entry.md5Checksum:
-      result = (false, "hash validation failed for archive " & $archiveIndex & " at offset " & $entry.startingOffset & ", length " & $entry.count)
-      break
-  archiveFile.close()
+      return (false, "hash validation failed for archive " & $archiveIndex & " at offset " & $entry.startingOffset & ", length " & $entry.count)
 
-proc checkArchiveHashes(v: Vpk): VpkCheckHashResult =
+proc checkArchiveHashes(v: var Vpk): VpkCheckHashResult =
   hashCheckHeaderVersion(v.header)
   let
     sectionOffset = v.header.fileDataOffset + v.header.fileDataSectionSize
@@ -228,7 +242,7 @@ proc checkOtherHashes(v: Vpk): VpkCheckHashResult =
 
   (true, "")
 
-proc checkHashes*(v: Vpk): VpkCheckHashResult =
+proc checkHashes*(v: var Vpk): VpkCheckHashResult =
   let archiveResult = v.checkArchiveHashes()
   if not archiveResult.result:
     return archiveResult
