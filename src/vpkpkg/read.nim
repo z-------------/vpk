@@ -145,16 +145,6 @@ proc readDirectory*(f: File): Table[string, VpkDirectoryEntry] =
         result[fullpath] = entry
         f.setFilePos(entry.preloadBytes.int64, fspCur)
 
-proc readVpk*(f: File; filename: string): Vpk =
-  result.f = f
-  result.filename = filename
-  result.header = readHeader(f)
-  result.entries = readDirectory(f)
-
-proc readVpk*(filename: string): Vpk =
-  let f = open(filename, fmRead)
-  readVpk(f, filename)
-
 # read files #
 
 proc getArchiveFile(v: var Vpk; archiveIndex: uint32): File =
@@ -259,3 +249,15 @@ proc checkHashes*(v: var Vpk): VpkCheckHashResult =
     return otherResult
 
   (true, "")
+
+# read vpk #
+
+proc readVpk*(f: File; filename: string): Vpk =
+  result.f = f
+  result.filename = filename
+  result.header = readHeader(f)
+  result.entries = readDirectory(f)
+
+proc readVpk*(filename: string): Vpk =
+  let f = open(filename, fmRead)
+  readVpk(f, filename)
