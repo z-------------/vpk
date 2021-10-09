@@ -17,6 +17,7 @@ import std/tables
 import std/os
 import std/strutils
 import std/md5
+import std/options
 import ./streamutils
 
 export tables
@@ -28,6 +29,7 @@ type
   Vpk* = object
     header*: VpkHeader
     entries*: Table[string, VpkDirectoryEntry]
+    signatureSection*: Option[VpkSignatureSection]
     filename*: string
     f: File # dir file
     archiveFiles: Table[uint32, File]
@@ -58,6 +60,9 @@ type
   VpkOtherMd5Entry = object
     treeChecksum: array[16, byte]
     archiveMd5SectionChecksum: array[16, byte]
+  VpkSignatureSection* = object
+    publicKey*: string
+    signature*: string
   VpkCheckHashResult* = tuple[result: bool; message: string]
 
 func fileDataOffset*(header: VpkHeader): uint32 =
@@ -65,6 +70,15 @@ func fileDataOffset*(header: VpkHeader): uint32 =
 
 func totalLength*(dirEntry: VpkDirectoryEntry): uint32 =
   dirEntry.preloadBytes + dirEntry.entryLength
+
+func archiveMd5SectionOffset(header: VpkHeader): uint32 =
+  header.fileDataOffset + header.fileDataSectionSize
+
+func otherMd5SectionOffset(header: VpkHeader): uint32 =
+  header.archiveMd5SectionOffset + header.archiveMd5SectionSize
+
+func signatureSectionOffset(header: VpkHeader): uint32 =
+  header.otherMd5SectionOffset + header.otherMd5SectionSize
 
 proc close*(v: var Vpk) =
   ## close dir file and any archive files
@@ -189,13 +203,12 @@ proc checkArchiveHashesForIndex(v: var Vpk; archiveIndex: uint32; entries: seq[V
 
 proc checkArchiveHashes(v: var Vpk): VpkCheckHashResult =
   hashCheckHeaderVersion(v.header)
-  let
-    sectionOffset = v.header.fileDataOffset + v.header.fileDataSectionSize
-    count = v.header.archiveMd5SectionSize div 28 # each entry is 28 bytes long
+
+  let count = v.header.archiveMd5SectionSize div 28 # each entry is 28 bytes long
   if count == 0:
     return (true, "no archive hashes to check")
   var archiveEntries: Table[uint32, seq[VpkArchiveMd5Entry]]
-  v.f.setFilePos(sectionOffset.int64)
+  v.f.setFilePos(v.header.archiveMd5SectionOffset.int64)
   for i in 0..<count:
     let entry = v.f.readStruct(VpkArchiveMd5Entry)
     if not archiveEntries.hasKey(entry.archiveIndex):
@@ -217,10 +230,7 @@ proc checkOtherHashes(v: Vpk): VpkCheckHashResult =
   else:
     raise newException(CatchableError, "unexpected other hashes section size: " & $v.header.otherMd5SectionSize)
 
-  let
-    archiveMd5SectionOffset = v.header.fileDataOffset + v.header.fileDataSectionSize
-    sectionOffset = archiveMd5SectionOffset + v.header.archiveMd5SectionSize
-  v.f.setFilePos(sectionOffset.int64)
+  v.f.setFilePos(v.header.otherMd5SectionOffset.int64)
   let entry = v.f.readStruct(VpkOtherMd5Entry)
 
   # tree
@@ -231,7 +241,7 @@ proc checkOtherHashes(v: Vpk): VpkCheckHashResult =
     return (false, "hash validation failed for tree")
 
   # archive md5 section
-  v.f.setFilePos(archiveMd5SectionOffset.int64)
+  v.f.setFilePos(v.header.archiveMd5SectionOffset.int64)
   var archiveMd5SectionData = newString(v.header.archiveMd5SectionSize)
   v.f.readBufferStrict(addr archiveMd5SectionData[0], v.header.archiveMd5SectionSize)
   if toMd5(archiveMd5SectionData) != entry.archiveMd5SectionChecksum:
@@ -250,6 +260,26 @@ proc checkHashes*(v: var Vpk): VpkCheckHashResult =
 
   (true, "")
 
+# read signature #
+
+proc readSignatureSectionImpl(v: Vpk): VpkSignatureSection =
+  ## assumes signature section is present
+  v.f.setFilePos(v.header.signatureSectionOffset.int64)
+
+  let publicKeySize = v.f.read(uint32)
+  result.publicKey = newString(publicKeySize)
+  v.f.readBufferStrict(addr result.publicKey[0], publicKeySize)
+
+  let signatureSize = v.f.read(uint32)
+  result.signature = newString(signatureSize)
+  v.f.readBufferStrict(addr result.signature[0], signatureSize)
+
+proc readSignatureSection(v: Vpk): Option[VpkSignatureSection] =
+  if v.header.signatureSectionSize == 0:
+    none(VpkSignatureSection)
+  else:
+    some(v.readSignatureSectionImpl())
+
 # read vpk #
 
 proc readVpk*(f: File; filename: string): Vpk =
@@ -257,6 +287,7 @@ proc readVpk*(f: File; filename: string): Vpk =
   result.filename = filename
   result.header = readHeader(f)
   result.entries = readDirectory(f)
+  result.signatureSection = readSignatureSection(result)
 
 proc readVpk*(filename: string): Vpk =
   let f = open(filename, fmRead)
