@@ -219,6 +219,13 @@ proc checkArchiveHashes(v: var Vpk): VpkCheckHashResult =
 
 proc checkOtherHashes(v: Vpk): VpkCheckHashResult =
   hashCheckHeaderVersion(v.header)
+  case v.header.otherMd5SectionSize
+  of 0:
+    return (true, "no other hashes to check")
+  of 48:
+    discard
+  else:
+    raise newException(CatchableError, "unexpected other hashes section size: " & $v.header.otherMd5SectionSize)
 
   let
     archiveMd5SectionOffset = v.header.fileDataOffset + v.header.fileDataSectionSize
