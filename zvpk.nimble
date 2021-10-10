@@ -6,7 +6,7 @@ description   = "VPK"
 license       = "GPL-3.0-or-later"
 srcDir        = "src"
 installExt    = @["nim"]
-bin           = @["vpk"]
+bin           = @["zvpk"]
 
 
 # Dependencies
