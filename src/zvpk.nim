@@ -31,7 +31,7 @@ when isMainModule:
     if entry.totalLength > 0:
       var fileBuf = newString(entry.totalLength)
       v.readFile(entry, addr fileBuf[0], entry.totalLength)
-      echo fileBuf
+      stdout.write(fileBuf)
   else:
     echo v.header
     for fullpath in v.entries.keys:
