@@ -20,15 +20,14 @@ export read
 when isMainModule:
   import std/os
   import std/parseopt
-  import std/strutils
   import std/options
 
   template die(msg: string; status = 1) =
     stderr.writeLine(msg)
     quit(status)
 
-  proc parseParams(params: openArray[string]): tuple[opts: Table[string, string]; args: seq[string]] =
-    var optParser = initOptParser(params.join(" "))
+  proc parseParams(params: seq[string]): tuple[opts: Table[string, string]; args: seq[string]] =
+    var optParser = initOptParser(params)
     for kind, key, val in optParser.getopt:
       case kind
       of cmdArgument:
