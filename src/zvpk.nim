@@ -21,6 +21,7 @@ when isMainModule:
   import std/os
   import std/parseopt
   import std/options
+  import std/tables
 
   template die(msg: string; status = 1) =
     stderr.writeLine(msg)
