@@ -14,6 +14,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import std/macros
+from std/sequtils import toSeq
 
 template `+@`*[T: SomeInteger](p: pointer; offset: T): pointer =
   ## Pointer offset
@@ -36,6 +37,9 @@ proc readString*(f: File): string =
 iterator fields(t: NimNode): NimNode =
   for fieldNode in t.getType[1].getType[2]:
     yield fieldNode
+
+template tail[T](l: seq[T]): seq[T] =
+  l[1..l.high]
 
 macro readStruct*(f: File; T: typedesc): untyped =
   var stmtList = newStmtList()
@@ -68,3 +72,30 @@ macro readStruct*(f: File; T: typedesc): untyped =
     ))
   stmtList.add(newIdentNode("obj"))
   result = newBlockStmt(stmtList)
+
+template buildSizeofExpr(T, fieldNode: NimNode): NimNode =
+  nnkCall.newTree(
+    newIdentNode("sizeof"),
+    nnkDotExpr.newTree(
+      T,
+      fieldNode
+    )
+  )
+
+template buildPlusInfix(a, b: NimNode): NimNode =
+  nnkInfix.newTree(
+    newIdentNode("+"),
+    a,
+    b
+  )
+
+func buildSizeofTree(T: NimNode; fieldNodes: seq[NimNode]): NimNode =
+  if fieldNodes.len == 1:
+    buildSizeofExpr(T, fieldNodes[0])
+  else:
+    buildPlusInfix(buildSizeofExpr(T, fieldNodes[0]), buildSizeofTree(T, fieldNodes.tail))
+
+macro sizeOfStruct*(T: typedesc): untyped =
+  result = nnkPar.newTree(
+    buildSizeofTree(T, toSeq(T.fields))
+  )

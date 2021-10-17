@@ -204,7 +204,7 @@ proc checkArchiveHashesForIndex(v: var Vpk; archiveIndex: uint32; entries: seq[V
 proc checkArchiveHashes(v: var Vpk): VpkCheckHashResult =
   hashCheckHeaderVersion(v.header)
 
-  let count = v.header.archiveMd5SectionSize div 28 # each entry is 28 bytes long
+  let count = v.header.archiveMd5SectionSize div sizeOfStruct(VpkArchiveMd5Entry)
   if count == 0:
     return (true, "no archive hashes to check")
   var archiveEntries: Table[uint32, seq[VpkArchiveMd5Entry]]
