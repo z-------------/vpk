@@ -49,7 +49,12 @@ when isMainModule:
       else:
         none(string)
     isCheckHashes = params.opts.hasKey("check-hashes")
-  var v = readVpk(filename)
+  var v: Vpk
+  try:
+    v = readVpk(filename)
+  except IOError as e:
+    stderr.writeLine(e.msg)
+    quit(QuitFailure)
 
   if entryName.isSome:
     let entry = v.entries[entryName.get]
