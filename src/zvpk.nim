@@ -18,10 +18,13 @@ import zvpkpkg/read
 export read
 
 when isMainModule:
-  import std/os
-  import std/parseopt
-  import std/options
-  import std/tables
+  import std/[
+    options,
+    os,
+    parseopt,
+    strformat,
+    tables,
+  ]
 
   template die(msg: string; status = 1) =
     stderr.writeLine(msg)
@@ -57,7 +60,11 @@ when isMainModule:
     quit(QuitFailure)
 
   if entryName.isSome:
-    let entry = v.entries[entryName.get]
+    let entry =
+      try:
+        v.entries[entryName.get]
+      except KeyError:
+        quit(&"Entry '{entryName.get}' not found")
     if entry.totalLength > 0:
       var fileBuf = newString(entry.totalLength)
       v.readFile(entry, addr fileBuf[0], entry.totalLength)
