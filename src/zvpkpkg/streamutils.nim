@@ -16,10 +16,6 @@
 import std/macros
 from std/sequtils import toSeq
 
-template `+@`*[T: SomeInteger](p: pointer; offset: T): pointer =
-  ## Pointer offset
-  cast[pointer](cast[ByteAddress](p) + offset.int64)
-
 template readBufferStrict*[T: SomeInteger](f: File; outBuf: pointer; outBufLen: T) =
   if f.readBuffer(outBuf, outBufLen) != outBufLen.int:
     raise newException(CatchableError, "not enough data left to read " & $outBufLen & " bytes")

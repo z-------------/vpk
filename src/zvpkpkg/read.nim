@@ -181,7 +181,8 @@ proc readFile*(v: var Vpk; dirEntry: VpkDirectoryEntry; outBuf: pointer; outBufL
     else:
       (v.getArchiveFile(dirEntry.archiveIndex), dirEntry.entryOffset)
   archiveFile.setFilePos(offset.int64)
-  archiveFile.readBufferStrict(outBuf +@ p, min(dirEntry.entryLength, outBufLen - p))
+  let writePtr = cast[pointer](cast[uint](outBuf) + p)
+  archiveFile.readBufferStrict(writePtr, min(dirEntry.entryLength, outBufLen - p))
 
 # check hashes #
 
