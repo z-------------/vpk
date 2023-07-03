@@ -16,8 +16,8 @@
 import std/tables
 import std/os
 import std/strutils
-import std/md5
 import std/options
+import pkg/checksums/md5
 import ./streamutils
 
 export tables
