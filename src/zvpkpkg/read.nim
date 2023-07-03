@@ -18,12 +18,10 @@ import std/os
 import std/strutils
 import std/options
 import pkg/checksums/md5
+import ./consts
 import ./streamutils
 
 export tables
-
-template empty[T](a: openArray[T]): bool =
-  a.len == 0
 
 type
   Vpk* = object
@@ -103,7 +101,7 @@ func getArchiveFilename*(v: Vpk; archiveIndex: uint32): string =
 
 proc readHeader*(f: File): VpkHeader =
   result.magicNumber = f.read(uint32)
-  if result.magicNumber != 0x55aa1234:
+  if result.magicNumber != MagicNumber:
     raise newException(CatchableError, "invalid VPK file: wrong file signature: 0x" & $result.magicNumber.toHex())
   result.version = f.read(uint32)
   if result.version notin {1, 2}:
@@ -119,12 +117,12 @@ proc readHeader*(f: File): VpkHeader =
   result.endOffset = f.getFilePos()
 
 proc readDirectoryEntry*(f: File): VpkDirectoryEntry =
-  result.crc = f.read(uint32)
+  result.crc = f.read(uint32) # TODO
   result.preloadBytes = f.read(uint16)
   result.archiveIndex = f.read(uint16)
   result.entryOffset = f.read(uint32)
   result.entryLength = f.read(uint32)
-  if f.read(uint16) != 0xffff:
+  if f.read(uint16) != DirectoryEntryTerminator:
     raise newException(CatchableError, "expected terminator")
 
   result.endOffset = f.getFilePos()
@@ -143,15 +141,15 @@ func buildFullPath(extension, path, filename: string): string =
 proc readDirectory*(f: File): Table[string, VpkDirectoryEntry] =
   while true:
     let extension = f.readString()
-    if extension.empty:
+    if extension == "":
       break
     while true:
       let path = f.readString()
-      if path.empty:
+      if path == "":
         break
       while true:
         let filename = f.readString()
-        if filename.empty:
+        if filename == "":
           break
         let
           fullPath = buildFullPath(extension, path, filename)
@@ -178,7 +176,7 @@ proc readFile*(v: var Vpk; dirEntry: VpkDirectoryEntry; outBuf: pointer; outBufL
     p += dirEntry.preloadBytes
 
   let (archiveFile, offset) =
-    if dirEntry.archiveIndex == 0x7fff:
+    if dirEntry.archiveIndex == SameFileArchiveIndex:
       (v.f, v.header.fileDataOffset + dirEntry.entryOffset)
     else:
       (v.getArchiveFile(dirEntry.archiveIndex), dirEntry.entryOffset)
