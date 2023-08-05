@@ -1,12 +1,10 @@
 # Package
 
-version       = "0.0.0"
+version       = "0.1.0"
 author        = "Zack Guard"
-description   = "VPK"
+description   = "Read VPK files"
 license       = "GPL-3.0-or-later"
 srcDir        = "src"
-installExt    = @["nim"]
-bin           = @["zvpk"]
 
 
 # Dependencies
