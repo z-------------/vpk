@@ -30,6 +30,11 @@ proc readString*(f: File): string =
       break
     result.add(c)
 
+proc writeBytes*[T](f: File; x: T) =
+  let bytesWritten = f.writeBytes(cast[array[sizeof(T), byte]](x), 0, sizeof(T))
+  if bytesWritten < sizeof(T):
+    raise newException(CatchableError, "file write error; wrote fewer bytes than expected")
+
 iterator fields(t: NimNode): NimNode =
   for fieldNode in t.getType[1].getType[2]:
     yield fieldNode
