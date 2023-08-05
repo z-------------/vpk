@@ -12,4 +12,4 @@ bin           = @["zvpk"]
 # Dependencies
 
 requires "nim >= 1.4.8"
-requires "checksums"
+requires "checksums >= 0.1.0"
