@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [ "ci" ]
+  workflow_dispatch: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        nim_version:
+          - 1.4.8
+          - 2.0.0
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install Nim
+        run: |
+          cd "$HOME"
+          mkdir nim && cd nim
+          curl -L 'https://nim-lang.org/download/nim-${{ matrix.nim_version }}-linux_x64.tar.xz' | tar -xJ
+          echo "PATH=$(pwd)/nim-"'${{ matrix.nim_version }}'"/bin:$PATH" >> "$GITHUB_ENV"
+      - name: Install dependencies
+        run: |
+          if command -v atlas; then
+            atlas install --autoinit --cfgHere
+          else
+            nimble setup
+          fi
+      - name: Compile
+        run: nim c vpk
