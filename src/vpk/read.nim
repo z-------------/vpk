@@ -24,6 +24,7 @@ import ./streamutils
 export tables
 
 type
+  VpkError* = object of CatchableError
   Vpk* = object
     header*: VpkHeader
     entries*: Table[string, VpkDirectoryEntry]
@@ -93,7 +94,7 @@ func getArchiveFilename*(v: Vpk; archiveIndex: uint32): string =
     (dir, name, extension) = splitFile(v.filename)
     suffixIdx = name.find(Suffix)
   if suffixIdx == -1 or suffixIdx + Suffix.len != name.len:
-    raise newException(CatchableError, "filename of current VPK does not end with \"_dir\"")
+    raise newException(VpkError, "filename of current VPK does not end with \"_dir\"")
   let
     nameBase = name[0..suffixIdx] # incl. '_'
     indexStr = ($archiveIndex).align(3, '0') # TODO is it always 3?
@@ -102,10 +103,10 @@ func getArchiveFilename*(v: Vpk; archiveIndex: uint32): string =
 proc readHeader*(f: File): VpkHeader =
   result.magicNumber = f.read(uint32)
   if result.magicNumber != MagicNumber:
-    raise newException(CatchableError, "invalid VPK file: wrong file signature: 0x" & $result.magicNumber.toHex())
+    raise newException(VpkError, "invalid VPK file: wrong file signature: 0x" & $result.magicNumber.toHex())
   result.version = f.read(uint32)
   if result.version notin {1, 2}:
-    raise newException(CatchableError, "invalid version: " & $result.version)
+    raise newException(VpkError, "invalid version: " & $result.version)
   result.treeSize = f.read(uint32)
 
   if result.version == 2:
@@ -123,7 +124,7 @@ proc readDirectoryEntry*(f: File): VpkDirectoryEntry =
   result.entryOffset = f.read(uint32)
   result.entryLength = f.read(uint32)
   if f.read(uint16) != DirectoryEntryTerminator:
-    raise newException(CatchableError, "expected terminator")
+    raise newException(VpkError, "expected terminator")
 
   result.endOffset = f.getFilePos()
 
@@ -188,7 +189,7 @@ proc readFile*(v: var Vpk; dirEntry: VpkDirectoryEntry; outBuf: pointer; outBufL
 
 template hashCheckHeaderVersion(header: VpkHeader): untyped =
   if header.version != 2:
-    raise newException(CatchableError, "only VPK 2 supports hash checking")
+    raise newException(VpkError, "only VPK 2 supports hash checking")
 
 proc checkArchiveHashesForIndex(v: var Vpk; archiveIndex: uint32; entries: seq[VpkArchiveMd5Entry]): VpkCheckHashResult =
   result = (true, "")
@@ -227,7 +228,7 @@ proc checkOtherHashes(v: Vpk): VpkCheckHashResult =
   of 48:
     discard
   else:
-    raise newException(CatchableError, "unexpected other hashes section size: " & $v.header.otherMd5SectionSize)
+    raise newException(VpkError, "unexpected other hashes section size: " & $v.header.otherMd5SectionSize)
 
   v.f.setFilePos(v.header.otherMd5SectionOffset.int64)
   let entry = v.f.readStruct(VpkOtherMd5Entry)
