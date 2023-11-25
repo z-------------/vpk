@@ -16,9 +16,13 @@
 import std/macros
 from std/sequtils import toSeq
 
-template readBufferStrict*[T: SomeInteger](f: File; outBuf: pointer; outBufLen: T) =
+proc readBufferStrict*(f: File; outBuf: pointer; outBufLen: SomeInteger) =
   if f.readBuffer(outBuf, outBufLen) != outBufLen.int:
     raise newException(CatchableError, "not enough data left to read " & $outBufLen & " bytes")
+
+proc readBufferStrict*[T: char or byte](f: File; outBuf: var openArray[T]) =
+  if outBuf.len > 0:
+    readBufferStrict(f, addr outBuf[0], outBuf.len)
 
 proc read*(f: File; T: typedesc): T =
   f.readBufferStrict(result.addr, sizeof(T))

@@ -197,7 +197,7 @@ proc checkArchiveHashesForIndex(v: var Vpk; archiveIndex: uint32; entries: seq[V
   for entry in entries:
     archiveFile.setFilePos(entry.startingOffset.int64)
     var dataChunk = newString(entry.count)
-    archiveFile.readBufferStrict(addr dataChunk[0], entry.count)
+    archiveFile.readBufferStrict(dataChunk)
     if toMd5(dataChunk) != entry.md5Checksum:
       return (false, "hash validation failed for archive " & $archiveIndex & " at offset " & $entry.startingOffset & ", length " & $entry.count)
 
@@ -236,14 +236,14 @@ proc checkOtherHashes(v: Vpk): VpkCheckHashResult =
   # tree
   v.f.setFilePos(v.header.endOffset)
   var treeData = newString(v.header.treeSize)
-  v.f.readBufferStrict(addr treeData[0], v.header.treeSize)
+  v.f.readBufferStrict(treeData)
   if toMd5(treeData) != entry.treeChecksum:
     return (false, "hash validation failed for tree")
 
   # archive md5 section
   v.f.setFilePos(v.header.archiveMd5SectionOffset.int64)
   var archiveMd5SectionData = newString(v.header.archiveMd5SectionSize)
-  v.f.readBufferStrict(addr archiveMd5SectionData[0], v.header.archiveMd5SectionSize)
+  v.f.readBufferStrict(archiveMd5SectionData)
   if toMd5(archiveMd5SectionData) != entry.archiveMd5SectionChecksum:
     return (false, "hash validation failed for archive MD5 section")
 
@@ -268,11 +268,11 @@ proc readSignatureSectionImpl(v: Vpk): VpkSignatureSection =
 
   let publicKeySize = v.f.read(uint32)
   result.publicKey = newString(publicKeySize)
-  v.f.readBufferStrict(addr result.publicKey[0], publicKeySize)
+  v.f.readBufferStrict(result.publicKey)
 
   let signatureSize = v.f.read(uint32)
   result.signature = newString(signatureSize)
-  v.f.readBufferStrict(addr result.signature[0], signatureSize)
+  v.f.readBufferStrict(result.signature)
 
 proc readSignatureSection(v: Vpk): Option[VpkSignatureSection] =
   if v.header.signatureSectionSize == 0:
