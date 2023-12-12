@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.1.1"
+version       = "0.1.2"
 author        = "Zack Guard"
 description   = "Read VPK files"
 license       = "GPL-3.0-or-later"
