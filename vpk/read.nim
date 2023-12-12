@@ -168,13 +168,14 @@ proc getArchiveFile(v: var Vpk; archiveIndex: uint32): File =
     v.archiveFiles[archiveIndex] = archiveFile
     archiveFile
 
-proc readFile*(v: var Vpk; dirEntry: VpkDirectoryEntry; outBuf: pointer; outBufLen: uint32) =
-  var p = 0'u32
+proc readFile*(v: var Vpk; dirEntry: VpkDirectoryEntry; outBuf: var openArray[char]) =
+  var p = 0
 
   if dirEntry.preloadBytes != 0:
     v.f.setFilePos(dirEntry.endOffset)
-    v.f.readBufferStrict(outBuf, min(dirEntry.preloadBytes.uint32, outBufLen))
-    p += dirEntry.preloadBytes
+    let preloadLen = min(dirEntry.preloadBytes.int, outBuf.len)
+    v.f.readBufferStrict(outBuf.toOpenArray(0, preloadLen - 1))
+    p += preloadLen
 
   let (archiveFile, offset) =
     if dirEntry.archiveIndex == SameFileArchiveIndex:
@@ -182,8 +183,8 @@ proc readFile*(v: var Vpk; dirEntry: VpkDirectoryEntry; outBuf: pointer; outBufL
     else:
       (v.getArchiveFile(dirEntry.archiveIndex), dirEntry.entryOffset)
   archiveFile.setFilePos(offset.int64)
-  let writePtr = cast[pointer](cast[uint](outBuf) + p)
-  archiveFile.readBufferStrict(writePtr, min(dirEntry.entryLength, outBufLen - p))
+  let readLen = min(dirEntry.entryLength.int, outBuf.len - p)
+  archiveFile.readBufferStrict(outBuf.toOpenArray(p, p + readLen - 1))
 
 # check hashes #
 
