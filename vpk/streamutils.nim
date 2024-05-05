@@ -43,35 +43,19 @@ iterator fields(t: NimNode): NimNode =
     yield fieldNode
 
 macro readStruct*(f: File; T: typedesc): untyped =
-  var stmtList = newStmtList()
-  stmtList.add(nnkVarSection.newTree(
-    nnkIdentDefs.newTree(
-      newIdentNode("obj"),
-      T,
-      newEmptyNode()
-    )
-  ))
+  let stmtList = newStmtList()
+  let objSym = genSym(nskVar, "obj")
+  stmtList.add(newVarStmt(objSym, newCall(bindSym"default", T)))
   for fieldNode in T.fields:
-    stmtList.add(nnkAsgn.newTree(
-      nnkDotExpr.newTree(
-        newIdentNode("obj"),
-        fieldNode
-      ),
-      nnkCall.newTree(
-        nnkDotExpr.newTree(
-          f,
-          newIdentNode("read")
-        ),
-        nnkCall.newTree(
-          newIdentNode("type"),
-          nnkDotExpr.newTree(
-            newIdentNode("obj"),
-            fieldNode
-          )
-        )
+    stmtList.add(newAssignment(
+      newDotExpr(objSym, fieldNode),
+      newCall(
+        bindSym"read",
+        f,
+        newCall(bindSym"typeof", newDotExpr(objSym, fieldNode))
       )
     ))
-  stmtList.add(newIdentNode("obj"))
+  stmtList.add(objSym)
   result = newBlockStmt(stmtList)
 
 func buildSizeofTree(T: NimNode; fieldNodes: seq[NimNode]): NimNode =
@@ -82,6 +66,4 @@ func buildSizeofTree(T: NimNode; fieldNodes: seq[NimNode]): NimNode =
     infix(newCall(bindSym"sizeof", newDotExpr(T, fieldNodes[0])), "+", buildSizeofTree(T, rest))
 
 macro sizeOfStruct*(T: typedesc): untyped =
-  result = nnkPar.newTree(
-    buildSizeofTree(T, toSeq(T.fields))
-  )
+  result = buildSizeofTree(T, toSeq(T.fields))
