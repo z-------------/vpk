@@ -15,6 +15,8 @@
 
 import std/macros
 from std/sequtils import toSeq
+when defined(nimPreviewSlimSystem):
+  import std/syncio
 
 template raiseNotEnoughData(expectedLen: int) =
   raise newException(CatchableError, "not enough data left to read " & $expectedLen & " bytes")

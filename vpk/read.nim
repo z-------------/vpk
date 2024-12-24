@@ -20,6 +20,8 @@ import std/options
 import pkg/checksums/md5
 import ./consts
 import ./streamutils
+when defined(nimPreviewSlimSystem):
+  import std/syncio
 
 export tables
 
